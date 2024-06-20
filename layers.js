@@ -8,7 +8,8 @@ const { proceed } = require('contextjs');
 const DroneContext = Object.freeze({
   SAFE_LANDING: 'SafeLanding',
   GROUND_SEARCH: 'GroundSearch',
-  LANDING: 'Landing'
+  LANDING: 'Landing',
+  BAD_CONNECTION: 'BadConnection'
 });
 
 
@@ -16,6 +17,7 @@ const droneContextMap = new Map([
   [DroneContext.SAFE_LANDING, { active: false, messageSent: false }],
   [DroneContext.GROUND_SEARCH, { active: false, messageSent: false }],
   [DroneContext.LANDING, { active: false, messageSent: false }]
+  [DroneContext.BAD_CONNECTION, { active: false, messageSent: false }]
 ]);
 
 function getEnabledLayers() {
@@ -46,6 +48,10 @@ class MockDrone {
     return JSON.stringify({ action: 'GoDestinyAutomatic' });
   }
 
+
+
+
+
 }
 
 
@@ -66,26 +72,12 @@ let socket;
 const drone = new MockDrone();
 
 function addEnableLayers(systemVariables) {
-  if (systemVariables.currentBattery <= 15) {
-    droneContextMap.set(DroneContext.SAFE_LANDING, { active: true, messageSent: false });
-  }
 
-  if (systemVariables.currentBattery > 15) {
-    droneContextMap.set(DroneContext.SAFE_LANDING, { active: false, messageSent: false });
-  }
 
-  /*if (!canReachDestination(systemVariables) && !systemVariables.safeLand) {
-    console.log('LowBatterySafeLanding pushed to enable layers list'); 
+  if (systemVariables.currentBattery <= 15 ) {
     droneContextMap.set(DroneContext.SAFE_LANDING, { active: true, messageSent: false });
     enableLayersList.push(L1);
   }
-  else {
-    console.log('LowBatterySafeLanding pushed to disable layers list');
-    droneContextMap.set(DroneContext.SAFE_LANDING, { active: false, messageSent: false });
-    disableLayersList.push(L1);
-  }*/
-
-
 
   if (droneContextMap.get(DroneContext.SAFE_LANDING).active && systemVariables.isOnWater) {
     droneContextMap.set(DroneContext.GROUND_SEARCH, { active: true, messageSent: false });
@@ -98,7 +90,6 @@ function addEnableLayers(systemVariables) {
   if (droneContextMap.get(DroneContext.GROUND_SEARCH).active) {
 
     if(!systemVariables.isOnWater) {
-      console.log('End Ground Search Context');
       droneContextMap.set(DroneContext.GROUND_SEARCH, {active: false, messageSent: false});
       disableLayersList.push(L3);
     }
@@ -113,10 +104,17 @@ function addEnableLayers(systemVariables) {
 
   if(droneContextMap.get(DroneContext.LANDING).active && systemVariables.isLanded) {
     disableLayersList.push(L4);
+    disableLayersList.push(L1);
     droneContextMap.set(DroneContext.LANDING, { active: false, messageSent: false });
     droneContextMap.set(DroneContext.SAFE_LANDING, { active: false, messageSent: false });
     console.log('End Landing Context pushed to disableLayersList');
   }
+
+  if(!systemVariables.goodConnection && systemVariables.badConnection) {
+    droneContextMap.set(DroneContext.BAD_CONNECTION, { active: true, messageSent: false });
+  }
+
+  
 
 
 }
@@ -174,7 +172,7 @@ function runDroneOperations(systemVariables, ws) {
 
   socket.send(drone.goDestinyAutomatic());
   socket.send(drone.landing());
-  //socket.send(drone.setSafeLanding());
+  socket.send(drone.setSafeLanding());
 
   enableLayersList.splice(0, enableLayersList.length);
   disableLayersList.splice(0, disableLayersList.length);
@@ -212,9 +210,15 @@ module.exports = { runDroneOperations };
 
 
 
-function canReachDestination(systemVariables) {
-  estimatedBatteryNeeded = drone.distanceToTarget * (drone.consumptionPerSecond + drone.consumptionPerBlock);
-  return systemVariables.currentBattery >= estimatedBatteryNeeded;
-}
+/*function canReachDestination(systemVariables) {
+  estimatedBatteryNeeded = systemVariables.distanceToTarget * (systemVariables.consumptionPerBlock);
+  console.log('Distance to target:'+ systemVariables.distanceToTarget);
+  console.log('Consumption per second:'+ systemVariables.consumptionPerSecond);
+  console.log('Consumption per block:'+ systemVariables.consumptionPerBlock);
+  console.log('Estimated battery needed:'+ estimatedBatteryNeeded);
+  console.log('Current battery:'+ systemVariables.currentBattery);
+  console.log('Initial battery:'+ estimatedBatteryNeeded);
+  return Number(systemVariables.currentBattery) >= estimatedBatteryNeeded;
+}*/
 
 
