@@ -16,7 +16,7 @@ const DroneContext = Object.freeze({
 const droneContextMap = new Map([
   [DroneContext.SAFE_LANDING, { active: false, messageSent: false }],
   [DroneContext.GROUND_SEARCH, { active: false, messageSent: false }],
-  [DroneContext.LANDING, { active: false, messageSent: false }]
+  [DroneContext.LANDING, { active: false, messageSent: false }],
   [DroneContext.BAD_CONNECTION, { active: false, messageSent: false }]
 ]);
 
@@ -32,9 +32,6 @@ function isLayerEnabled(layer) {
 class MockDrone {
 
 	  
-  goTo() {
-		return 'Moves to the direction of the target';
-	}
 
   setSafeLanding() {
     return JSON.stringify({ action: 'SafeLandingFalse'});
@@ -48,9 +45,9 @@ class MockDrone {
     return JSON.stringify({ action: 'GoDestinyAutomatic' });
   }
 
-
-
-
+  badConnectionAction() {
+    return JSON.stringify({ action: 'noBadConnection' });
+  }
 
 }
 
@@ -58,10 +55,10 @@ class MockDrone {
 //cop.create('Q12_SetLowBattery'); Maybe later try to have a running program first
 
 const L1 = layer("Q1_LowBatterySafeLanding");
-const L2 = layer("Q2_CheckTerrain");
 const L3 = layer("Q3_GroundSearch");
 const L4 = layer("Q4_ExecuteLanding");
-const L9 = layer("Q9_EmergencyLanding");
+const L5 = layer("Q5_BadConnection_returnBase");
+const L6 = layer("Q6_BadConnectionBehavior_seekConnection");
 
 let enableLayersList = [];
 
@@ -105,15 +102,41 @@ function addEnableLayers(systemVariables) {
   if(droneContextMap.get(DroneContext.LANDING).active && systemVariables.isLanded) {
     disableLayersList.push(L4);
     disableLayersList.push(L1);
+    disableLayersList.push(L5);
+    disableLayersList.push(L6);
     droneContextMap.set(DroneContext.LANDING, { active: false, messageSent: false });
     droneContextMap.set(DroneContext.SAFE_LANDING, { active: false, messageSent: false });
-    console.log('End Landing Context pushed to disableLayersList');
   }
 
   if(!systemVariables.goodConnection && systemVariables.badConnection) {
     droneContextMap.set(DroneContext.BAD_CONNECTION, { active: true, messageSent: false });
   }
 
+  if(droneContextMap.get(DroneContext.BAD_CONNECTION).active) {
+    if(systemVariables.badConnectionAction == 'returnBase'){
+      enableLayersList.push(L5);
+      
+    }
+
+    if(systemVariables.badConnectionAction =='seekConnection'){
+      enableLayersList.push(L6);
+      if(systemVariables.goodConnection){
+        disableLayersList.push(L6);
+        droneContextMap.set(DroneContext.BAD_CONNECTION, { active: false, messageSent: false });
+      }
+    }
+
+  }
+
+  if(droneContextMap.get(DroneContext.BAD_CONNECTION).active && systemVariables.goodConnection) {
+    droneContextMap.set(DroneContext.BAD_CONNECTION, { active: false, messageSent: false });
+    disableLayersList.push(L6);
+  }
+
+  if(systemVariables.distanceToSource == 0){
+    disableLayersList.push(L5);
+    droneContextMap.set(DroneContext.BAD_CONNECTION, { active: false, messageSent: false });
+  }
   
 
 
@@ -145,8 +168,25 @@ L4.refineClass(MockDrone, {
     droneContextMap.set(DroneContext.LANDING, { ...landingContext, messageSent: true });
     return JSON.stringify({ action: 'ExecuteLanding' });
   }
-}); 
+});
 
+
+L5.refineClass(MockDrone, {
+  badConnectionAction() {
+    const badConnectionContext = droneContextMap.get(DroneContext.BAD_CONNECTION);
+    droneContextMap.set(DroneContext.BAD_CONNECTION, { ...badConnectionContext, messageSent: true });
+    return JSON.stringify({ action: 'returnBase' });
+  }
+});
+
+
+L6.refineClass(MockDrone, {
+  badConnectionAction() {
+    const badConnectionContext = droneContextMap.get(DroneContext.BAD_CONNECTION);
+    droneContextMap.set(DroneContext.BAD_CONNECTION, { ...badConnectionContext, messageSent: true });
+    return JSON.stringify({ action:'seekConnection' });
+  }
+});
 
 
 
@@ -173,52 +213,15 @@ function runDroneOperations(systemVariables, ws) {
   socket.send(drone.goDestinyAutomatic());
   socket.send(drone.landing());
   socket.send(drone.setSafeLanding());
+  socket.send(drone.badConnectionAction());
 
   enableLayersList.splice(0, enableLayersList.length);
   disableLayersList.splice(0, disableLayersList.length);
-  /*withLayers(layersToEnable, () => {
-    const drone = new MockDrone();
-    console.log(drone.goDestinyAutomatic()); // This should now trigger the refined method
-  });*/
 }
 
 
 module.exports = { runDroneOperations };
 
 
-
-
-
-/*Q5_BadConnection.refineClass(Object, {
-    execute: function (actions, antennaContext) {
-      if(systemVariables.badConnection == true) {
-        antennaContext.badConnection = true; // Update context
-        droneContext.seekConnection = true; // Update context
-      }
-    },
-  });*/
-
-
-/*Q6_BadConnectionBehavior.refineClass(Object, {
-    execute: function (actions, antennaContext) {
-      if (antennaContext.badConnection) {
-        actions.push('Initiate connection retry');
-        antennaContext.badConnection = false; // Update context   Implement later because you have to figure out sending the setting before
-      }
-    }, 
-  });*/ 
-
-
-
-/*function canReachDestination(systemVariables) {
-  estimatedBatteryNeeded = systemVariables.distanceToTarget * (systemVariables.consumptionPerBlock);
-  console.log('Distance to target:'+ systemVariables.distanceToTarget);
-  console.log('Consumption per second:'+ systemVariables.consumptionPerSecond);
-  console.log('Consumption per block:'+ systemVariables.consumptionPerBlock);
-  console.log('Estimated battery needed:'+ estimatedBatteryNeeded);
-  console.log('Current battery:'+ systemVariables.currentBattery);
-  console.log('Initial battery:'+ estimatedBatteryNeeded);
-  return Number(systemVariables.currentBattery) >= estimatedBatteryNeeded;
-}*/
 
 

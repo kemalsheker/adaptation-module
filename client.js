@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const { runDroneOperations } = require('./layers'); // Adjust the path as necessary
+const { runDroneOperations } = require('./index'); 
 
 
 // Create WebSocket connection to the server
@@ -33,6 +33,7 @@ socket.on('message', function (message) {
     consumptionPerBlock: parseInt(data.consumptionPerBlock),
     isLanded: data.landing,
     safeLand: data.safeLand,
+    badConnectionAction: data.badConnectionAction,
     connectionRetry: data.connectionRetry || 0
   };
 
@@ -52,4 +53,3 @@ socket.on('error', function (error) {
 socket.on('close', function () {
   console.log('Disconnected from the server');
 });
-
